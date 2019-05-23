@@ -161,7 +161,6 @@ def printprogram(lth, ltm, usedtimes, guessers_raw, guessed_times):
 
 				if time1 in guessed_times:
 					index = guessed_times.index(time1)
-					print guessers_raw
 					name1 = guessers_raw[index]
 				if time2 in guessed_times:
 					index = guessed_times.index(time2)

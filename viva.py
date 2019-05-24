@@ -9,9 +9,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 
-#starttime = '14:00'
-#person = 'Lis'
-
+##### Check for previous viva
 if not ('guesses.txt' in os.listdir('.')):
 	open('guesses.txt','w').close()
 
@@ -25,8 +23,7 @@ else:
 		starttime = raw_input('Type viva start time (HH:MM): ')
 		person = raw_input('Type who is taking the viva: ')
 		f.write(str(starttime)+'\n'+str(person))
-				
-				
+
 ##### Window Setup
 root = Tk()
 root.title('Viva Extravaganza')
@@ -112,21 +109,58 @@ with open('guesses.txt', 'r') as f:
 		guessers.append(name.replace(" ", ""))
 		guessed_times.append(time)
 
-label_array[0].config(text='Start Time', bg='#daa520')
+label_array[0].config(text='Start Time', bg='mediumorchid')
 
 def endprogram():
 	with open('details.txt','r') as f:
 		f.readline()
 		person = f.readline()
-	os.rename('guesses.txt', person+'_guesses.txt')
+	addstring, addstring2 = '', ''
+	dt = datetime.datetime.today()
+	if dt.month < 10:
+		addstring = '0'
+	if dt.day < 10:
+		addstring2 = '0'
+	save_dir = person+'_'+str(dt.year)+addstring+str(dt.month)+addstring2+str(dt.day)
+	os.mkdir(save_dir)
+	os.rename('guesses.txt', save_dir+'/'+person+'_guesses.txt')
 	os.remove('details.txt')
+	if os.path.isfile('vivaparty_printout.pdf'):
+		os.rename('vivaparty_printout.pdf', save_dir+'/vivaparty_printout.pdf')
+		os.remove('vivaparty_printout.log')
+		os.remove('vivaparty_printout.aux')
+		os.remove('vivaparty_printout.tex')
 	exit()
 
 def printprogram(lth, ltm, usedtimes, guessers_raw, guessed_times):
+	global printed 
 	with open('details.txt','r') as f:
 		f.readline()
 		person = f.readline()
-	printed = False
+
+	addstring, addstring2 = '', ''
+	dt = datetime.datetime.today()
+	if dt.month < 10:
+		addstring = '0'
+	if dt.day < 10:
+		addstring2 = '0'
+
+	shour = int(usedtimes[0].split(':')[0])
+	smin = int(usedtimes[0].split(':')[1])
+	
+	comp_h = int(lth) - shour
+	comp_m = int(ltm) - smin
+
+	if comp_m < 0:
+		comp_h = comp_h - 1
+		comp_m = comp_m + 60
+
+	hourstring,  minutestring = 'hours', 'minutes'
+	if comp_h == 1:
+		hourstring = 'hour'
+	if comp_m == 1:
+		minutestring = 'minute'
+
 	if printed != True:
 		with open('vivaparty_printout.tex', 'w') as g:
 			g.write('\documentclass{article}' + '\n')
@@ -142,16 +176,18 @@ def printprogram(lth, ltm, usedtimes, guessers_raw, guessed_times):
 			g.write('\n')
 			g.write('\huge{{{}}}'.format(person) + '\n')
 			g.write('\n')
-			g.write('\\vspace{15mm}' + '\n')
-			g.write('\LARGE{{Viva completed at: {}:{}}}'.format(lth, ltm) + '\n')
+			g.write('\\vspace{12mm}' + '\n')
+			g.write('\LARGE{{Viva completed at: {}:{} on {}{}/{}{}/{}}}'.format(lth, ltm, addstring2, dt.day, addstring, dt.month, dt.year) + '\n')
+			g.write('\n')
+			g.write('\LARGE{{Viva completed in: {} {} and {} {}}}'.format(comp_h, hourstring, comp_m, minutestring) + '\n')
 			g.write('\n')			
-			g.write('\\vspace{15mm}' + '\n')
+			g.write('\\vspace{12mm}' + '\n')
 			g.write('\Large{}' + '\n')
 			g.write('\\begin{tabular}{l c@{\hskip 10mm} l c@{\hskip 10mm} c l}' + '\n')
 			for i in range(len(usedtimes)/3):
-				name1 = ""
-				name2 = ""
-				name3 = ""
+				name1 = "\\hspace{18mm}"
+				name2 = "\\hspace{18mm}"
+				name3 = "\\hspace{18mm}"
 				time1 = usedtimes[i]
 				time2 = usedtimes[i+len(usedtimes)/3]
 				time3 = usedtimes[i+(len(usedtimes)*2)/3]
@@ -176,7 +212,12 @@ def printprogram(lth, ltm, usedtimes, guessers_raw, guessed_times):
 			g.write('\end{document}')
 
 		os.system("pdflatex vivaparty_printout.tex")
-		os.system("lpr -P HP_LaserJet_P4015__4th_Floor_ vivaparty_printout.pdf")
+		try:
+			os.system("lpr -P HP_LaserJet_P4015__4th_Floor_ vivaparty_printout.pdf")
+		except:
+			print "Couldn't locate printer... Has the printer name been changed?"
+		printed = True
+
 	return
 
 ############# Guess Entry and Update
@@ -255,21 +296,14 @@ printed = False
 playing = False
 number = 0
 def whoswinning(usedtimes, endbutton=0, printbutton=0):
-	global playing,number
-	number += 1
-	if (number >= 1000):
-		number = 0
-	colourline = np.linspace(0,1,1000)
+	global playing,number,printed
+	used_cmap, max_num = 'hsv', 1000
 
 	if printbutton != 0:
 		printbutton.destroy()
 	if endbutton != 0:
 		endbutton.destroy()
 
-	cmap = plt.cm.get_cmap('gnuplot')
-	rgba = 255.*np.asarray(cmap(colourline[number]))
-	colour = '#%02x%02x%02x' % (rgba[1],rgba[2],rgba[3])
-	#root.configure(background=colour)
 	t1 = t.time()
 	livetime = datetime.datetime.now().strftime("%H:%M")
 	clocktime = datetime.datetime.now().strftime("%H:%M:%S")
@@ -318,10 +352,11 @@ def whoswinning(usedtimes, endbutton=0, printbutton=0):
 		if min(proxs) == 0:
 			if int(clocktime.split(':')[2]) > 29:
 				clock.config(fg='red')
+				used_cmap, max_num = 'coolwarm', 17 
 
-			if int(clocktime.split(':')[2]) > 25:
+			if int(clocktime.split(':')[2]) > 29:
 				if playing == False:
-					subprocess.Popen(['afplay', 'countdown.mp3'])
+					subprocess.Popen(['afplay', 'countdown.mov'])
 					playing = True
 
 			if int(clocktime.split(':')[2]) > 0 and int(clocktime.split(':')[2]) < 1:
@@ -329,14 +364,26 @@ def whoswinning(usedtimes, endbutton=0, printbutton=0):
 
 		else:
 			clock.config(fg='black')
+			playing = False
 
 	winner.config(text=curr_winner, fg='Black')#, bg='white')
 	t2 = t.time()
+
+	# Update colour of banner
+	if number >= max_num:
+	    number = 0
+	colourline = np.linspace(0,2,max_num) / 2.
+	cmap = plt.cm.get_cmap(used_cmap)
+	rgba = 255.*np.asarray(cmap(colourline[number]))
+	colour = '#%02x%02x%02x' % (rgba[0],rgba[1],rgba[2])
+	vname.configure(bg=colour)
+	number += 1
 
 	def stopprogram(usedtimes, job):
 		root.after_cancel(job)
 		sstopbutton.configure(text='RESTART', command=lambda: whoswinning(usedtimes,endbutton,printbutton))
 		winner.config(fg='chartreuse3')
+		winnername = winner.cget("text")
 		endbutton = Button(root, font=(None, 18), bg='red', fg='white')
 		endbutton.place(x=screen_width*0.35, y=screen_height*0.22, anchor='center')
 		endbutton.configure(text='END VIVA PARTY', command=lambda: endprogram())

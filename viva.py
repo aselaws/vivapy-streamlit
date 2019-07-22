@@ -49,23 +49,24 @@ rules.place(x=screen_width*0.5, y=screen_height*0.89, anchor='center')
 ############## Table of Guesses
 starthour, startminute = starttime.split(':')
 
-hours = range(int(starthour), int(starthour)+6)
-mins_list = range(0, 60, 5)
-diffs = [abs(int(startminute)-mins) for mins in mins_list]
-
-shift = diffs.index(min(diffs))
-mins_list = mins_list[shift:]+mins_list[:shift]
-mins = mins_list
+num_hours = 6
+hours = range(int(starthour), int(starthour)+num_hours)
 
 times = []
 for h in hours:
-	for m in mins:
-		if m == 0:
-			m = '00'
-		if m == 5:
-			m = '05'
-		times.append(str(h)+':'+str(m))
-
+    if h == int(starthour):
+        mins = range(int(startminute), 60, 5)
+    elif h == int(starthour)+num_hours:
+        mins = range(0, int(startminute), 5)
+    else:
+        mins = range(0, 60, 5)
+    for m in mins:
+        if m == 0:
+            m = '00'
+        if m == 5:
+            m = '05'
+        times.append(str(h)+':'+str(m))
+        
 usedtimes = []
 label_array = []   
 height = 12

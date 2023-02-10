@@ -7,7 +7,9 @@ import numpy as np
 import datetime
 import time
 import pandas as pd
-# from streamlit_autorefresh import st_autorefresh
+from streamlit_autorefresh import st_autorefresh
+import base64
+
 
 # Functions:
 def main():
@@ -16,10 +18,15 @@ def main():
     # Set page config must be the first call to st.
     st.set_page_config(
         page_title='Viva Extravaganza',
-        page_icon='\U0001F40D',  # Snake emoji
+        page_icon='🐍',  # Snake emoji
         layout='wide'
         )
 
+    try:
+        viva_ended = st.session_state['viva_ended']
+    except KeyError:
+        viva_ended = False
+        st.session_state['viva_ended'] = viva_ended
 
     # Initial setup:
     with st.sidebar:
@@ -35,6 +42,11 @@ def main():
             max_chars=12
         )
 
+    # Time now is:
+    clocktime = datetime.datetime.now().strftime("%H:%M:%S")
+    # Placeholder name for times that aren't guessed:
+    placeholder_name = '-'
+
     ############## Main Title
     try:
         if list(person)[-1] == 's' or list(person)[-1] == 'S':
@@ -44,8 +56,8 @@ def main():
     except IndexError:
         # Presumably there's no user input yet.
         st.warning('''
-            :warning: Please enter the name of
-            the person taking the viva.
+            :warning: Who is taking the viva?
+            Enter their name in the left sidebar.
             ''')
         st.stop()
 
@@ -53,9 +65,13 @@ def main():
         # Convert to 'HH' and 'MM' and 'HHMM':
         starthour, startminute = starttime_input.split(':')
         starttime = starthour + startminute
-    except ValueError:
+        # Check they're legit:
+        starthour_int = int(starttime_input[0:2])
+        # Phrase this strangely to check we have five characters:
+        startminute_int = int(starttime_input[3] + starttime_input[4])
+    except (ValueError, IndexError):
         st.warning('''
-            :warning: Please amend the start time.
+            :warning: That\'s not a valid start time!
             ''')
         st.stop()
 
@@ -75,27 +91,40 @@ def main():
 
     container_tables = st.container()
     container_rules = st.container()
+    container_secret_countdown = st.container()
 
     with container_title:
         st.markdown('# ' + person + titext + ' \U0001F40D')
 
     with container_time_now:
-        st.markdown(f'### Start time: {starttime_input}')
+        st.markdown(f'### Start time: :violet[{starttime_input}]')
 
-        # Import a clock from timeanddate.com
-        # to show the current time:
-        st.markdown(
-            """
-            <iframe src="https://free.timeanddate.com/clock/i8pql2xr/n1363/tluk/fn11/fs48/fc888/tct/pct" 
-            frameborder="0"
-            width="218"
-            height="60"
-            allowtransparency="true"
-            >
-            </iframe>
-            """,
-            unsafe_allow_html=True
-        )
+        # Add a button for when the viva's finished.
+        if st.button('STOP'):
+            st.markdown('### End time: :balloon:' + clocktime + ':balloon:')
+            st.balloons()
+            viva_ended = True
+            st.session_state['viva_ended'] = True
+
+            # Haven't worked out how to get this working fully:
+            # if st.button('RESTART'):
+            #     st.session_state['viva_ended'] = False
+                # st.experimental_rerun()
+        else:
+            # Import a clock from timeanddate.com
+            # to show the current time:
+            st.markdown(
+                """
+                <iframe src="https://free.timeanddate.com/clock/i8pql2xr/n1363/tluk/fn11/fs48/fc888/tct/pct" 
+                frameborder="0"
+                width="218"
+                height="60"
+                allowtransparency="true"
+                >
+                </iframe>
+                """,
+                unsafe_allow_html=True
+            )
 
     ############## Rules
     rulestext = 'Rules: One guess per person, closest non-exceeded time wins.'
@@ -115,17 +144,20 @@ def main():
 
     with container_guess_input:
         with st.form('Guess input', clear_on_submit=True):
-            name_input = st.text_input(
-                'Name',
-                value='',
-                max_chars=12
-                )
-            guess_input = st.text_input(
-                'Guess',
-                value='',
-                max_chars=5,
-                placeholder='00:00'
-                )
+            cols_form = st.columns(2)
+            with cols_form[0]:
+                name_input = st.text_input(
+                    'Name',
+                    value='',
+                    max_chars=30
+                    )
+            with cols_form[1]:
+                guess_input = st.text_input(
+                    'Guess',
+                    value='',
+                    max_chars=5,
+                    placeholder='00:00'
+                    )
 
             # Every form must have a submit button.
             submitted = st.form_submit_button('Add guess')
@@ -238,6 +270,8 @@ def main():
                 if guess_first_hour == guess_last_hour:
                     mins = range(int(guess_first_mins),
                                 int(guess_last_mins) + 5, 5)
+                if h < 10:
+                    h = '0' + str(h)
                 for m in mins:
                     if m == 0:
                         m = '00'
@@ -245,8 +279,9 @@ def main():
                         m = '05'
                     times.append(str(h)+':'+str(m))
 
+
         # Make labels of guessers' names to match the times:
-        label_array = ['-' for time in times]
+        label_array = [placeholder_name for time in times]
         for guesser in guess_dict.keys():
             # Find what time they guessed:
             guess = guess_dict[guesser]
@@ -258,7 +293,7 @@ def main():
 
 
         # Who's winning?
-        livetime = datetime.datetime.now().strftime("%H:%M")
+        livetime = datetime.datetime.now().strftime("%H:%M:%S")
         # Where would the current time go in the sorted list of times?
         ind = np.searchsorted(times, livetime)
         # Find the first guess that's after that index.
@@ -272,8 +307,35 @@ def main():
             # There are no winners here.
             winner = 'Make a guess!'
 
+        # Check if we're 30 seconds away from the person losing.
+        play_music = False
+        try:
+            next_name = label_array[ind]
+            if next_name != placeholder_name:
+                if livetime[4] in ['4', '9'] and livetime[6] in ['2', '3']:
+                    play_music = True
+        except IndexError:
+            # There's no name to consider.
+            pass
+
+
         with container_winner:
-            st.markdown('## ' + winner)
+            if play_music is True:
+                # Add gif of the flashing colour bar:
+                file_ = open('colour_test.gif', "rb")
+                contents = file_.read()
+                data_url = base64.b64encode(contents).decode("utf-8")
+                file_.close()
+
+                st.markdown(
+                    f'''<center><img src="data:image/gif;base64,{data_url}" width="500"
+                        height="10" alt="Flashing bar">''',
+                    unsafe_allow_html=True,
+                )
+            st.markdown('### Winner: ')
+            st.markdown(f'## :green[{winner}]')
+
+
 
 
         # ############### Tables ###
@@ -290,12 +352,24 @@ def main():
         # With ludicrous guesses, the columns become squeezed too thin.
         # Limit this by introducing another row when there are more
         # columns than this:
-        max_columns_per_row = 5
+        max_columns_per_row = 4
+
+        # Use this function to colour the rows in the table:
+
+        def colour_names(val):
+            if val == winner:
+                color = 'green'
+            elif val == placeholder_name:
+                color = None
+            else:
+                color = 'lightsteelblue'
+            return f'background-color: {color}'
 
         j = max_columns_per_row + 1
         for i in range(n_columns):
             if j >= max_columns_per_row:
-                cols = st.columns(min(n_columns-i, max_columns_per_row))
+                # cols = st.columns(min(n_columns-i, max_columns_per_row))
+                cols = st.columns(max_columns_per_row)
                 j = 0
             with cols[j]:
                 table_here = pd.DataFrame(
@@ -304,7 +378,8 @@ def main():
                     columns=['~']
                     )
                 # Draw the table:
-                st.table(table_here)
+                # st.table(table_here)
+                st.table(table_here.style.applymap(colour_names, subset=['~']))
 
                 # Update indices for next go round the loop:
                 ind_min += n_per_column
@@ -312,25 +387,69 @@ def main():
                 j += 1
 
 
-    # Time now is:
-    clocktime = datetime.datetime.now().strftime("%H:%M:%S")
-    # st.write(clocktime)
-    # clockmins = clocktime[3:5]
-    # clocksecs = clocktime[6:8]
-    # st.write(clockmins, clocksecs)
-    # # At the next multiple of five minutes,
-    # # need to re-run Streamlit for the winner to be updated.
-    # rerun_after = (
-    #     (5 - (int(clockmins) % 5)) * 60  # seconds
-    #     - int(clocksecs)
-    # )
+    # Countdown theme
+    with container_secret_countdown:
+        if play_music is True:
+            with st.sidebar:
+            # cols_secret = st.columns(10)
+            # with cols_secret[0]:
+                # Weirdly, the autoplay doesn't work properly unless
+                # there's a call to st.audio() first.
+                # So create this Countdown on command but hide it somewhere:
+                for i in range(100):
+                    # Empty line to use up some space:
+                    st.markdown(' ')
+                st.write('Shh, please ignore this: ')
+                st.audio(
+                    'countdown.mp3',
+                    format="audio/mp3",
+                    start_time=0
+                    )
 
-    # # Update every 1 mins, stop after 6 hours.
-    # st_autorefresh(
-    #     interval=1 * 60 * 1000,
-    #     limit=60 * 6,
-    #     key='refresh'
-    #     )
+            def autoplay_audio(file_path: str):
+                with open(file_path, "rb") as f:
+                    data = f.read()
+                    b64 = base64.b64encode(data).decode()
+                    md = f"""
+                        <audio control autoplay="true">
+                        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+                        </audio>
+                        """
+                    st.markdown(
+                        md,
+                        unsafe_allow_html=True,
+                    )
+
+            with st.sidebar:
+                autoplay_audio('./countdown.mp3')
+
+
+    if viva_ended is False:
+        # Time now is:
+        clocktime = datetime.datetime.now().strftime("%H:%M:%S")
+
+        clockmins = clocktime[3:5]
+        clocksecs = clocktime[6:8]
+
+        # At the next multiple of five minutes,
+        # need to re-run Streamlit for the winner to be updated.
+        rerun_after = (
+            # (5 - (int(clockmins) % 5)) * 60  # seconds
+            # - int(clocksecs)
+            30 - (int(clocksecs) % 30)
+        )
+
+        if rerun_after < 30 and rerun_after > 0:
+            time.sleep(rerun_after)
+            # After this time, auto refresh every minute.
+
+
+        # Update every 30 seconds, stop after 6 hours.
+        st_autorefresh(
+            interval=1 * 30 * 1000,
+            limit=2 * 60 * 6,
+            key='refresh'
+            )
 
 if __name__ == '__main__':
     main()

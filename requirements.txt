@@ -1,0 +1,7 @@
+numpy==1.21.5
+pandas==1.4.2
+pip==22.2.2
+streamlit_autorefresh==0.0.1
+# Don't give a version for streamlit 
+# to ensure the app has the latest security updates. 
+streamlit
